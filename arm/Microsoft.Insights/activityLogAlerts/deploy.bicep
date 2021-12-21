@@ -1,5 +1,5 @@
-@description('Required. The name of the Alert.')
-param alertName string
+@description('Required. The name of the alert.')
+param name string
 
 @description('Optional. Description of the alert.')
 param alertDescription string = ''
@@ -10,7 +10,7 @@ param location string = 'global'
 @description('Optional. Indicates whether this alert is enabled.')
 param enabled bool = true
 
-@description('Required. the list of resource id\'s that this metric alert is scoped to.')
+@description('Required. the list of resource IDs that this metric alert is scoped to.')
 param scopes array = [
   subscription().id
 ]
@@ -27,12 +27,12 @@ param roleAssignments array = []
 @description('Optional. Tags of the resource.')
 param tags object = {}
 
-@description('Optional. Customer Usage Attribution id (GUID). This GUID must be previously registered')
+@description('Optional. Customer Usage Attribution ID (GUID). This GUID must be previously registered')
 param cuaId string = ''
 
 var actionGroups = [for action in actions: {
   actionGroupId: contains(action, 'actionGroupId') ? action.actionGroupId : action
-  webhookProperties: contains(action, 'webhookProperties') ? action.webhookProperties : json('null')
+  webhookProperties: contains(action, 'webhookProperties') ? action.webhookProperties : null
 }]
 
 module pid_cuaId '.bicep/nested_cuaId.bicep' = if (!empty(cuaId)) {
@@ -41,7 +41,7 @@ module pid_cuaId '.bicep/nested_cuaId.bicep' = if (!empty(cuaId)) {
 }
 
 resource activityLogAlert 'Microsoft.Insights/activityLogAlerts@2020-10-01' = {
-  name: alertName
+  name: name
   location: location
   tags: tags
   properties: {
@@ -58,13 +58,19 @@ resource activityLogAlert 'Microsoft.Insights/activityLogAlerts@2020-10-01' = {
 }
 
 module activityLogAlert_rbac '.bicep/nested_rbac.bicep' = [for (roleAssignment, index) in roleAssignments: {
-  name: '${deployment().name}-rbac-${index}'
+  name: '${uniqueString(deployment().name, location)}-ActivityLogAlert-Rbac-${index}'
   params: {
-    roleAssignmentObj: roleAssignment
-    resourceName: activityLogAlert.name
+    principalIds: roleAssignment.principalIds
+    roleDefinitionIdOrName: roleAssignment.roleDefinitionIdOrName
+    resourceId: activityLogAlert.id
   }
 }]
 
+@description('The name of the activity log alert')
 output activityLogAlertName string = activityLogAlert.name
+
+@description('The resource ID of the activity log alert')
 output activityLogAlertResourceId string = activityLogAlert.id
+
+@description('The resource group the activity log alert was deployed into')
 output activityLogAlertResourceGroup string = resourceGroup().name

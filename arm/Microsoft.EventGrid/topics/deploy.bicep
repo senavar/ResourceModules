@@ -1,8 +1,5 @@
-// this file can only be deployed at a subscription scope
-targetScope = 'resourceGroup'
-
 @description('Required. The name of the Event Grid Topic')
-param eventGridTopicName string
+param name string
 
 @description('Optional. Location for all Resources.')
 param location string = resourceGroup().location
@@ -18,10 +15,10 @@ param inboundIpRules array = []
 @maxValue(365)
 param diagnosticLogsRetentionInDays int = 365
 
-@description('Optional. Resource identifier of the Diagnostic Storage Account.')
+@description('Optional. Resource ID of the diagnostic storage account.')
 param diagnosticStorageAccountId string = ''
 
-@description('Optional. Resource identifier of Log Analytics.')
+@description('Optional. Resource ID of log analytics.')
 param workspaceId string = ''
 
 @description('Optional. Resource ID of the event hub authorization rule for the Event Hubs namespace in which the event hub should be created or streamed to.')
@@ -47,7 +44,7 @@ param lock string = 'NotSpecified'
 @description('Optional. Tags of the resource.')
 param tags object = {}
 
-@description('Optional. Customer Usage Attribution id (GUID). This GUID must be previously registered')
+@description('Optional. Customer Usage Attribution ID (GUID). This GUID must be previously registered')
 param cuaId string = ''
 
 @description('Optional. The name of logs that will be streamed.')
@@ -93,12 +90,12 @@ module pid_cuaId '.bicep/nested_cuaId.bicep' = if (!empty(cuaId)) {
 }
 
 resource eventGrid 'Microsoft.EventGrid/topics@2020-06-01' = {
-  name: eventGridTopicName
+  name: name
   location: location
   tags: tags
   properties: {
     publicNetworkAccess: publicNetworkAccess
-    inboundIpRules: (empty(inboundIpRules) ? json('null') : inboundIpRules)
+    inboundIpRules: (empty(inboundIpRules) ? null : inboundIpRules)
   }
 }
 
@@ -111,21 +108,21 @@ resource eventGrid_lock 'Microsoft.Authorization/locks@2016-09-01' = if (lock !=
   scope: eventGrid
 }
 
-resource eventGrid_diagnosticSettings 'Microsoft.Insights/diagnosticsettings@2017-05-01-preview' = if ((!empty(diagnosticStorageAccountId)) || (!empty(workspaceId)) || (!empty(eventHubAuthorizationRuleId)) || (!empty(eventHubName))) {
+resource eventGrid_diagnosticSettings 'Microsoft.Insights/diagnosticsettings@2021-05-01-preview' = if ((!empty(diagnosticStorageAccountId)) || (!empty(workspaceId)) || (!empty(eventHubAuthorizationRuleId)) || (!empty(eventHubName))) {
   name: '${eventGrid.name}-diagnosticSettings'
   properties: {
-    storageAccountId: (empty(diagnosticStorageAccountId) ? json('null') : diagnosticStorageAccountId)
-    workspaceId: (empty(workspaceId) ? json('null') : workspaceId)
-    eventHubAuthorizationRuleId: (empty(eventHubAuthorizationRuleId) ? json('null') : eventHubAuthorizationRuleId)
-    eventHubName: (empty(eventHubName) ? json('null') : eventHubName)
-    metrics: ((empty(diagnosticStorageAccountId) && empty(workspaceId) && empty(eventHubAuthorizationRuleId) && empty(eventHubName)) ? json('null') : diagnosticsMetrics)
-    logs: ((empty(diagnosticStorageAccountId) && empty(workspaceId) && empty(eventHubAuthorizationRuleId) && empty(eventHubName)) ? json('null') : diagnosticsLogs)
+    storageAccountId: !empty(diagnosticStorageAccountId) ? diagnosticStorageAccountId : null
+    workspaceId: !empty(workspaceId) ? workspaceId : null
+    eventHubAuthorizationRuleId: !empty(eventHubAuthorizationRuleId) ? eventHubAuthorizationRuleId : null
+    eventHubName: !empty(eventHubName) ? eventHubName : null
+    metrics: diagnosticsMetrics
+    logs: diagnosticsLogs
   }
   scope: eventGrid
 }
 
 module eventGrid_privateEndpoints '.bicep/nested_privateEndpoint.bicep' = [for (privateEndpoint, index) in privateEndpoints: if (!empty(privateEndpoints)) {
-  name: '${uniqueString(deployment().name, location)}-EventGrid-PrivateEndpoints-${index}'
+  name: '${uniqueString(deployment().name, location)}-EventGrid-PrivateEndpoint-${index}'
   params: {
     privateEndpointResourceId: eventGrid.id
     privateEndpointVnetLocation: (empty(privateEndpoints) ? 'dummy' : reference(split(privateEndpoint.subnetResourceId, '/subnets/')[0], '2020-06-01', 'Full').location)
@@ -135,16 +132,19 @@ module eventGrid_privateEndpoints '.bicep/nested_privateEndpoint.bicep' = [for (
 }]
 
 module eventGrid_rbac '.bicep/nested_rbac.bicep' = [for (roleAssignment, index) in roleAssignments: {
-  name: '${deployment().name}-rbac-${index}'
+  name: '${uniqueString(deployment().name, location)}-EventGrid-Rbac-${index}'
   params: {
-    roleAssignmentObj: roleAssignment
-    resourceName: eventGrid.name
+    principalIds: roleAssignment.principalIds
+    roleDefinitionIdOrName: roleAssignment.roleDefinitionIdOrName
+    resourceId: eventGrid.id
   }
 }]
 
-@description('The Name of the Event Grid Topic')
+@description('The name of the event grid topic')
 output eventGridName string = eventGrid.name
-@description('The Resource Id of the Event Grid')
+
+@description('The resource ID of the event grid')
 output eventGridResourceId string = eventGrid.id
-@description('The name of the Resource Group with the Event Grid')
+
+@description('The name of the resource group the event grid was deployed into')
 output eventGridResourceGroup string = resourceGroup().name

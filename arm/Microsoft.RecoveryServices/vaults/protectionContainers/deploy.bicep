@@ -1,9 +1,8 @@
 @description('Required. Name of the Azure Recovery Service Vault')
-@minLength(1)
 param recoveryVaultName string
 
 @description('Required. Name of the Azure Recovery Service Vault Protection Container')
-param protectionContainerName string
+param name string
 
 @description('Optional. Backup management type to execute the current Protection Container job.')
 @allowed([
@@ -20,7 +19,7 @@ param protectionContainerName string
 ])
 param backupManagementType string = ''
 
-@description('Optional. Resource Id of the target resource for the Protection Container ')
+@description('Optional. Resource ID of the target resource for the Protection Container ')
 param sourceResourceId string = ''
 
 @description('Optional. Friendly name of the Protection Container')
@@ -41,7 +40,7 @@ param friendlyName string = ''
 ])
 param containerType string = ''
 
-@description('Optional. Customer Usage Attribution id (GUID). This GUID must be previously registered')
+@description('Optional. Customer Usage Attribution ID (GUID). This GUID must be previously registered')
 param cuaId string = ''
 
 module pid_cuaId './.bicep/nested_cuaId.bicep' = if (!empty(cuaId)) {
@@ -49,18 +48,21 @@ module pid_cuaId './.bicep/nested_cuaId.bicep' = if (!empty(cuaId)) {
   params: {}
 }
 
-resource vaultProtectionContainer 'Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers@2021-08-01' = {
-  name: '${recoveryVaultName}/Azure/${protectionContainerName}'
+resource protectionContainer 'Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers@2021-08-01' = {
+  name: '${recoveryVaultName}/Azure/${name}'
   properties: {
-    sourceResourceId: (empty(sourceResourceId) ? json('null') : sourceResourceId)
-    friendlyName: (empty(friendlyName) ? json('null') : friendlyName)
-    backupManagementType: (empty(backupManagementType) ? json('null') : backupManagementType)
-    containerType: (empty(containerType) ? json('null') : containerType)
+    sourceResourceId: !empty(sourceResourceId) ? sourceResourceId : null
+    friendlyName: !empty(friendlyName) ? friendlyName : null
+    backupManagementType: !empty(backupManagementType) ? backupManagementType : null
+    containerType: !empty(containerType) ? containerType : null
   }
 }
 
 @description('The name of the Resource Group the Protection Container was created in.')
 output protectionContainerResourceGroup string = resourceGroup().name
 
-@description('The Resource Id of the Protection Container.')
-output protectionContainerId string = vaultProtectionContainer.id
+@description('The resource ID of the Protection Container.')
+output protectionContainerResourceId string = protectionContainer.id
+
+@description('The Name of the Protection Container.')
+output protectionContainerName string = protectionContainer.name

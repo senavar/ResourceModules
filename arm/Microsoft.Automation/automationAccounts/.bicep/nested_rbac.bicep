@@ -1,5 +1,6 @@
-param roleAssignmentObj object
-param resourceName string
+param principalIds array
+param roleDefinitionIdOrName string
+param resourceId string
 
 var builtInRoleNames = {
   'Owner': subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '8e3af657-a8ff-443c-a75c-2fe8c4bcb635')
@@ -21,14 +22,14 @@ var builtInRoleNames = {
   'User Access Administrator': subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '18d7d88d-d35e-4fb5-a5c3-7773c20a72d9')
 }
 
-resource automationAccount 'Microsoft.Automation/automationAccounts@2020-01-13-preview' = {
-  name: resourceName
+resource automationAccount 'Microsoft.Automation/automationAccounts@2020-01-13-preview' existing = {
+  name: last(split(resourceId, '/'))
 }
 
-resource roleAssignment 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = [for principalId in roleAssignmentObj.principalIds: {
-  name: guid(automationAccount.name, principalId, roleAssignmentObj.roleDefinitionIdOrName)
+resource roleAssignment 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = [for principalId in principalIds: {
+  name: guid(automationAccount.name, principalId, roleDefinitionIdOrName)
   properties: {
-    roleDefinitionId: contains(builtInRoleNames, roleAssignmentObj.roleDefinitionIdOrName) ? builtInRoleNames[roleAssignmentObj.roleDefinitionIdOrName] : roleAssignmentObj.roleDefinitionIdOrName
+    roleDefinitionId: contains(builtInRoleNames, roleDefinitionIdOrName) ? builtInRoleNames[roleDefinitionIdOrName] : roleDefinitionIdOrName
     principalId: principalId
   }
   scope: automationAccount

@@ -1,5 +1,5 @@
 @description('Required. The name of the action group.')
-param actionGroupName string
+param name string
 
 @description('Required. The short name of the action group.')
 param groupShortName string
@@ -43,7 +43,7 @@ param armRoleReceivers array = []
 @description('Optional. Tags of the resource.')
 param tags object = {}
 
-@description('Optional. Customer Usage Attribution id (GUID). This GUID must be previously registered')
+@description('Optional. Customer Usage Attribution ID (GUID). This GUID must be previously registered')
 param cuaId string = ''
 
 @description('Optional. Location for all resources.')
@@ -55,33 +55,39 @@ module pid_cuaId '.bicep/nested_cuaId.bicep' = if (!empty(cuaId)) {
 }
 
 resource actionGroup 'microsoft.insights/actionGroups@2019-06-01' = {
-  name: actionGroupName
+  name: name
   location: location
   tags: tags
   properties: {
     groupShortName: groupShortName
     enabled: enabled
-    emailReceivers: (empty(emailReceivers) ? json('null') : emailReceivers)
-    smsReceivers: (empty(smsReceivers) ? json('null') : smsReceivers)
-    webhookReceivers: (empty(webhookReceivers) ? json('null') : webhookReceivers)
-    itsmReceivers: (empty(itsmReceivers) ? json('null') : itsmReceivers)
-    azureAppPushReceivers: (empty(azureAppPushReceivers) ? json('null') : azureAppPushReceivers)
-    automationRunbookReceivers: (empty(automationRunbookReceivers) ? json('null') : automationRunbookReceivers)
-    voiceReceivers: (empty(voiceReceivers) ? json('null') : voiceReceivers)
-    logicAppReceivers: (empty(logicAppReceivers) ? json('null') : logicAppReceivers)
-    azureFunctionReceivers: (empty(azureFunctionReceivers) ? json('null') : azureFunctionReceivers)
-    armRoleReceivers: (empty(armRoleReceivers) ? json('null') : armRoleReceivers)
+    emailReceivers: (empty(emailReceivers) ? null : emailReceivers)
+    smsReceivers: (empty(smsReceivers) ? null : smsReceivers)
+    webhookReceivers: (empty(webhookReceivers) ? null : webhookReceivers)
+    itsmReceivers: (empty(itsmReceivers) ? null : itsmReceivers)
+    azureAppPushReceivers: (empty(azureAppPushReceivers) ? null : azureAppPushReceivers)
+    automationRunbookReceivers: (empty(automationRunbookReceivers) ? null : automationRunbookReceivers)
+    voiceReceivers: (empty(voiceReceivers) ? null : voiceReceivers)
+    logicAppReceivers: (empty(logicAppReceivers) ? null : logicAppReceivers)
+    azureFunctionReceivers: (empty(azureFunctionReceivers) ? null : azureFunctionReceivers)
+    armRoleReceivers: (empty(armRoleReceivers) ? null : armRoleReceivers)
   }
 }
 
 module actionGroup_rbac '.bicep/nested_rbac.bicep' = [for (roleAssignment, index) in roleAssignments: {
-  name: '${deployment().name}-rbac-${index}'
+  name: '${uniqueString(deployment().name, location)}-ActionGroup-Rbac-${index}'
   params: {
-    roleAssignmentObj: roleAssignment
-    resourceName: actionGroup.name
+    principalIds: roleAssignment.principalIds
+    roleDefinitionIdOrName: roleAssignment.roleDefinitionIdOrName
+    resourceId: actionGroup.id
   }
 }]
 
-output deploymentResourceGroup string = resourceGroup().name
+@description('The resource group the action group was deployed into')
+output actionGroupResourceGroup string = resourceGroup().name
+
+@description('The name of the action group ')
 output actionGroupName string = actionGroup.name
+
+@description('The resource ID of the action group ')
 output actionGroupResourceId string = actionGroup.id
