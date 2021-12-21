@@ -2,11 +2,14 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
-        "recoveryVaultName": {
-            "value": "ProfilesBackupVault"
+        "name": {
+            "value": "sxx-az-rsv-x-001"
         },
-        "diagnosticLogsRetentionInDays": {
-            "value": 365
+        "backupConfig": {
+            "value": {
+                "enhancedSecurityState": "Disabled",
+                "softDeleteFeatureState": "Disabled"
+            }
         },
         "backupPolicies": {
             "value": [
@@ -243,10 +246,10 @@
                 }
             ]
         },
-        "backupStorageConfig":{
+        "backupStorageConfig": {
             "value": {
-                "vaultStorageType": "GeoRedundant",
-                "enableCRR": true
+                "storageModelType": "GeoRedundant",
+                "crossRegionRestoreFlag": true
             }
         },
         "roleAssignments": {
@@ -254,10 +257,33 @@
                 {
                     "roleDefinitionIdOrName": "Reader",
                     "principalIds": [
-                        "cf33fea8-b30f-424f-ab73-c48d99e0b222"
+                        "<<deploymentSpId>>"
                     ]
                 }
             ]
+        },
+        "diagnosticLogsRetentionInDays": {
+            "value": 7
+        },
+        "diagnosticStorageAccountId": {
+            "value": "/subscriptions/<<subscriptionId>>/resourceGroups/validation-rg/providers/Microsoft.Storage/storageAccounts/adpsxxazsaweux001"
+        },
+        "workspaceId": {
+            "value": "/subscriptions/<<subscriptionId>>/resourcegroups/validation-rg/providers/microsoft.operationalinsights/workspaces/adp-sxx-az-law-x-001"
+        },
+        "eventHubAuthorizationRuleId": {
+            "value": "/subscriptions/<<subscriptionId>>/resourceGroups/validation-rg/providers/Microsoft.EventHub/namespaces/adp-sxx-az-evhns-x-001/AuthorizationRules/RootManageSharedAccessKey"
+        },
+        "eventHubName": {
+            "value": "adp-sxx-az-evh-x-001"
+        },
+        "systemAssignedIdentity": {
+            "value": true
+        },
+        "userAssignedIdentities": {
+            "value": {
+                "/subscriptions/<<subscriptionId>>/resourcegroups/validation-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/adp-sxx-az-msi-x-001": {}
+            }
         }
     }
 }

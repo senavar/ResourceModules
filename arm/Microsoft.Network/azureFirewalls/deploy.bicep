@@ -1,5 +1,5 @@
 @description('Required. Name of the Azure Firewall.')
-param azureFirewallName string
+param name string
 
 @description('Optional. Name of an Azure Firewall SKU.')
 @allowed([
@@ -27,13 +27,13 @@ param networkRuleCollections array = []
 @description('Optional. Collection of NAT rule collections used by Azure Firewall.')
 param natRuleCollections array = []
 
-@description('Required. Shared services Virtual Network resource Id')
+@description('Required. Shared services Virtual Network resource ID')
 param vNetId string
 
 @description('Optional. Specifies the name of the Public IP used by Azure Firewall. If it\'s not provided, a \'-pip\' suffix will be appended to the Firewall\'s name.')
 param azureFirewallPipName string = ''
 
-@description('Optional. Resource Id of the Public IP Prefix object. This is only needed if you want your Public IPs created in a PIP Prefix.')
+@description('Optional. Resource ID of the Public IP Prefix object. This is only needed if you want your Public IPs created in a PIP Prefix.')
 param publicIPPrefixId string = ''
 
 @description('Optional. Diagnostic Storage Account resource identifier')
@@ -74,17 +74,16 @@ param lock string = 'NotSpecified'
 @description('Optional. Array of role assignment objects that contain the \'roleDefinitionIdOrName\' and \'principalId\' to define RBAC role assignments on this resource. In the roleDefinitionIdOrName attribute, you can provide either the display name of the role definition, or its fully qualified ID in the following format: \'/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-c644-48eb-af81-4b1b4947fb11\'')
 param roleAssignments array = []
 
-@description('Optional. Tags of the Automation Account resource.')
+@description('Optional. Tags of the Azure Firewall resource.')
 param tags object = {}
 
-@description('Optional. Customer Usage Attribution id (GUID). This GUID must be previously registered')
+@description('Optional. Customer Usage Attribution ID (GUID). This GUID must be previously registered')
 param cuaId string = ''
 
 var publicIPPrefix = {
   id: publicIPPrefixId
 }
 var azureFirewallSubnetId = '${vNetId}/subnets/AzureFirewallSubnet'
-var azureFirewallPipName_var = (empty(azureFirewallPipName) ? '${azureFirewallName}-pip' : azureFirewallPipName)
 var azureFirewallPipId = azureFirewallPip.id
 
 @description('Optional. The name of firewall logs that will be streamed.')
@@ -153,7 +152,7 @@ module pid_cuaId '.bicep/nested_cuaId.bicep' = if (!empty(cuaId)) {
 }
 
 resource azureFirewallPip 'Microsoft.Network/publicIPAddresses@2021-02-01' = {
-  name: azureFirewallPipName_var
+  name: !empty(azureFirewallPipName) ? azureFirewallPipName : '${name}-pip'
   location: location
   tags: tags
   sku: {
@@ -176,21 +175,21 @@ resource azureFirewallPip_lock 'Microsoft.Authorization/locks@2016-09-01' = if (
   scope: azureFirewallPip
 }
 
-resource azureFirewallPip_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2017-05-01-preview' = if (!empty(diagnosticStorageAccountId) || !empty(workspaceId) || !empty(eventHubAuthorizationRuleId) || !empty(eventHubName)) {
+resource azureFirewallPip_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (!empty(diagnosticStorageAccountId) || !empty(workspaceId) || !empty(eventHubAuthorizationRuleId) || !empty(eventHubName)) {
   name: '${azureFirewallPip.name}-diagnosticSettings'
   properties: {
-    storageAccountId: empty(diagnosticStorageAccountId) ? null : diagnosticStorageAccountId
-    workspaceId: empty(workspaceId) ? null : workspaceId
-    eventHubAuthorizationRuleId: empty(eventHubAuthorizationRuleId) ? null : eventHubAuthorizationRuleId
-    eventHubName: empty(eventHubName) ? null : eventHubName
-    metrics: empty(diagnosticStorageAccountId) && empty(workspaceId) && empty(eventHubAuthorizationRuleId) && empty(eventHubName) ? null : diagnosticsMetrics
-    logs: empty(diagnosticStorageAccountId) && empty(workspaceId) && empty(eventHubAuthorizationRuleId) && empty(eventHubName) ? null : diagnosticsLogsPublicIp
+    storageAccountId: !empty(diagnosticStorageAccountId) ? diagnosticStorageAccountId : null
+    workspaceId: !empty(workspaceId) ? workspaceId : null
+    eventHubAuthorizationRuleId: !empty(eventHubAuthorizationRuleId) ? eventHubAuthorizationRuleId : null
+    eventHubName: !empty(eventHubName) ? eventHubName : null
+    metrics: diagnosticsMetrics
+    logs: diagnosticsLogsPublicIp
   }
   scope: azureFirewallPip
 }
 
-resource azureFirewall 'Microsoft.Network/azureFirewalls@2021-02-01' = {
-  name: azureFirewallName
+resource azureFirewall 'Microsoft.Network/azureFirewalls@2021-03-01' = {
+  name: name
   location: location
   zones: length(availabilityZones) == 0 ? null : availabilityZones
   tags: tags
@@ -231,28 +230,29 @@ resource azureFirewall_lock 'Microsoft.Authorization/locks@2016-09-01' = if (loc
   scope: azureFirewall
 }
 
-resource azureFirewall_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2017-05-01-preview' = if (!empty(diagnosticStorageAccountId) || !empty(workspaceId) || !empty(eventHubAuthorizationRuleId) || !empty(eventHubName)) {
+resource azureFirewall_diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (!empty(diagnosticStorageAccountId) || !empty(workspaceId) || !empty(eventHubAuthorizationRuleId) || !empty(eventHubName)) {
   name: '${azureFirewall.name}-diagnosticSettings'
   properties: {
-    storageAccountId: empty(diagnosticStorageAccountId) ? null : diagnosticStorageAccountId
-    workspaceId: empty(workspaceId) ? null : workspaceId
-    eventHubAuthorizationRuleId: empty(eventHubAuthorizationRuleId) ? null : eventHubAuthorizationRuleId
-    eventHubName: empty(eventHubName) ? null : eventHubName
-    metrics: empty(diagnosticStorageAccountId) && empty(workspaceId) && empty(eventHubAuthorizationRuleId) && empty(eventHubName) ? null : diagnosticsMetrics
-    logs: empty(diagnosticStorageAccountId) && empty(workspaceId) && empty(eventHubAuthorizationRuleId) && empty(eventHubName) ? null : diagnosticsLogsAzureFirewall
+    storageAccountId: !empty(diagnosticStorageAccountId) ? diagnosticStorageAccountId : null
+    workspaceId: !empty(workspaceId) ? workspaceId : null
+    eventHubAuthorizationRuleId: !empty(eventHubAuthorizationRuleId) ? eventHubAuthorizationRuleId : null
+    eventHubName: !empty(eventHubName) ? eventHubName : null
+    metrics: diagnosticsMetrics
+    logs: diagnosticsLogsAzureFirewall
   }
   scope: azureFirewall
 }
 
 module azureFirewall_rbac '.bicep/nested_rbac.bicep' = [for (roleAssignment, index) in roleAssignments: {
-  name: '${deployment().name}-rbac-${index}'
+  name: '${uniqueString(deployment().name, location)}-AzFW-Rbac-${index}'
   params: {
-    roleAssignmentObj: roleAssignment
-    resourceName: azureFirewall.name
+    principalIds: roleAssignment.principalIds
+    roleDefinitionIdOrName: roleAssignment.roleDefinitionIdOrName
+    resourceId: azureFirewall.id
   }
 }]
 
-@description('The resourceId of the Azure firewall')
+@description('The resource ID of the Azure firewall')
 output azureFirewallResourceId string = azureFirewall.id
 
 @description('The name of the Azure firewall')

@@ -1,5 +1,5 @@
 @description('Required. The name of the Azure Analysis Services server to create.')
-param analysisServicesName string
+param name string
 
 @description('Optional. The sku name of the Azure Analysis Services server to create.')
 param skuName string = 'S0'
@@ -27,10 +27,10 @@ param location string = resourceGroup().location
 @maxValue(365)
 param diagnosticLogsRetentionInDays int = 365
 
-@description('Optional. Resource identifier of the Diagnostic Storage Account.')
+@description('Optional. Resource ID of the diagnostic storage account.')
 param diagnosticStorageAccountId string = ''
 
-@description('Optional. Resource identifier of Log Analytics.')
+@description('Optional. Resource ID of log analytics.')
 param workspaceId string = ''
 
 @description('Optional. Resource ID of the event hub authorization rule for the Event Hubs namespace in which the event hub should be created or streamed to.')
@@ -53,7 +53,7 @@ param roleAssignments array = []
 @description('Optional. Tags of the resource.')
 param tags object = {}
 
-@description('Optional. Customer Usage Attribution id (GUID). This GUID must be previously registered')
+@description('Optional. Customer Usage Attribution ID (GUID). This GUID must be previously registered')
 param cuaId string = ''
 
 @description('Optional. The name of logs that will be streamed.')
@@ -99,7 +99,7 @@ module pid_cuaId '.bicep/nested_cuaId.bicep' = if (!empty(cuaId)) {
 }
 
 resource server 'Microsoft.AnalysisServices/servers@2017-08-01' = {
-  name: analysisServicesName
+  name: name
   location: location
   tags: tags
   sku: {
@@ -120,27 +120,33 @@ resource server_lock 'Microsoft.Authorization/locks@2016-09-01' = if (lock != 'N
   scope: server
 }
 
-resource server_diagnosticSettings 'Microsoft.Insights/diagnosticsettings@2017-05-01-preview' = if ((!empty(diagnosticStorageAccountId)) || (!empty(workspaceId)) || (!empty(eventHubAuthorizationRuleId)) || (!empty(eventHubName))) {
+resource server_diagnosticSettings 'Microsoft.Insights/diagnosticsettings@2021-05-01-preview' = if ((!empty(diagnosticStorageAccountId)) || (!empty(workspaceId)) || (!empty(eventHubAuthorizationRuleId)) || (!empty(eventHubName))) {
   name: '${server.name}-diagnosticSettings'
   properties: {
-    storageAccountId: (empty(diagnosticStorageAccountId) ? json('null') : diagnosticStorageAccountId)
-    workspaceId: (empty(workspaceId) ? json('null') : workspaceId)
-    eventHubAuthorizationRuleId: (empty(eventHubAuthorizationRuleId) ? json('null') : eventHubAuthorizationRuleId)
-    eventHubName: (empty(eventHubName) ? json('null') : eventHubName)
-    metrics: ((empty(diagnosticStorageAccountId) && empty(workspaceId) && empty(eventHubAuthorizationRuleId) && empty(eventHubName)) ? json('null') : diagnosticsMetrics)
-    logs: ((empty(diagnosticStorageAccountId) && empty(workspaceId) && empty(eventHubAuthorizationRuleId) && empty(eventHubName)) ? json('null') : diagnosticsLogs)
+    storageAccountId: !empty(diagnosticStorageAccountId) ? diagnosticStorageAccountId : null
+    workspaceId: !empty(workspaceId) ? workspaceId : null
+    eventHubAuthorizationRuleId: !empty(eventHubAuthorizationRuleId) ? eventHubAuthorizationRuleId : null
+    eventHubName: !empty(eventHubName) ? eventHubName : null
+    metrics: diagnosticsMetrics
+    logs: diagnosticsLogs
   }
   scope: server
 }
 
 module server_rbac '.bicep/nested_rbac.bicep' = [for (roleAssignment, index) in roleAssignments: {
-  name: '${deployment().name}-rbac-${index}'
+  name: '${uniqueString(deployment().name, location)}-AnServicesServer-Rbac-${index}'
   params: {
-    roleAssignmentObj: roleAssignment
-    resourceName: server.name
+    principalIds: roleAssignment.principalIds
+    roleDefinitionIdOrName: roleAssignment.roleDefinitionIdOrName
+    resourceId: server.id
   }
 }]
 
+@description('The name of the analysis service')
 output analysisServicesName string = server.name
+
+@description('The resource ID of the analysis service')
 output analysisServicesResourceId string = server.id
+
+@description('The resource group the analysis service was deployed into')
 output analysisServicesResourceGroup string = resourceGroup().name

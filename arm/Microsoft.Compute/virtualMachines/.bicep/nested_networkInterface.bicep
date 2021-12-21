@@ -37,7 +37,7 @@ var networkSecurityGroup = {
 }
 
 module networkInterface_publicIPConfigurations 'nested_networkInterface_publicIPAddress.bicep' = [for (ipConfiguration, index) in ipConfigurationArray: if (contains(ipConfiguration, 'pipconfiguration')) {
-  name: '${deployment().name}-pip-${index}'
+  name: '${deployment().name}-PIP-${index}'
   params: {
     publicIPAddressName: '${virtualMachineName}${ipConfiguration.pipconfiguration.publicIpNameSuffix}'
     publicIPPrefixId: (contains(ipConfiguration.pipconfiguration, 'publicIPPrefixId') ? (!(empty(ipConfiguration.pipconfiguration.publicIPPrefixId)) ? ipConfiguration.pipconfiguration.publicIPPrefixId : '') : '')
@@ -58,7 +58,7 @@ module networkInterface_publicIPConfigurations 'nested_networkInterface_publicIP
   }
 }]
 
-resource networkInterface 'Microsoft.Network/networkInterfaces@2021-02-01' = {
+resource networkInterface 'Microsoft.Network/networkInterfaces@2021-03-01' = {
   name: networkInterfaceName
   location: location
   tags: tags
@@ -101,15 +101,16 @@ resource networkInterface_diagnosticSettings 'Microsoft.Insights/diagnosticsetti
     workspaceId: !empty(workspaceId) ? workspaceId : null
     eventHubAuthorizationRuleId: !empty(eventHubAuthorizationRuleId) ? eventHubAuthorizationRuleId : null
     eventHubName: !empty(eventHubName) ? eventHubName : null
-    metrics: !empty(diagnosticStorageAccountId) || !empty(workspaceId) || !empty(eventHubAuthorizationRuleId) || !empty(eventHubName) ? diagnosticsMetrics : null
+    metrics: diagnosticsMetrics
   }
   scope: networkInterface
 }
 
 module networkInterface_rbac 'nested_networkInterface_rbac.bicep' = [for (roleAssignment, index) in roleAssignments: {
-  name: '${deployment().name}-rbac-${index}'
+  name: '${deployment().name}-Rbac-${index}'
   params: {
-    roleAssignmentObj: roleAssignment
-    resourceName: networkInterface.name
+    principalIds: roleAssignment.principalIds
+    roleDefinitionIdOrName: roleAssignment.roleDefinitionIdOrName
+    resourceId: networkInterface.id
   }
 }]

@@ -57,10 +57,10 @@ param baseTime string = utcNow('u')
 @maxValue(365)
 param diagnosticLogsRetentionInDays int = 365
 
-@description('Optional. Resource identifier of the Diagnostic Storage Account.')
+@description('Optional. Resource ID of the diagnostic storage account.')
 param diagnosticStorageAccountId string = ''
 
-@description('Optional. Resource identifier of Log Analytics.')
+@description('Optional. Resource ID of log analytics.')
 param workspaceId string = ''
 
 @description('Optional. Resource ID of the event hub authorization rule for the Event Hubs namespace in which the event hub should be created or streamed to.')
@@ -80,7 +80,7 @@ param lock string = 'NotSpecified'
 @description('Optional. Tags of the resource.')
 param tags object = {}
 
-@description('Optional. Customer Usage Attribution id (GUID). This GUID must be previously registered')
+@description('Optional. Customer Usage Attribution ID (GUID). This GUID must be previously registered')
 param cuaId string = ''
 
 @description('Optional. The type of preferred application group type, default to Desktop Application Group')
@@ -155,7 +155,7 @@ resource hostPool 'Microsoft.DesktopVirtualization/hostpools@2021-07-12' = {
       token: null
       registrationTokenOperation: 'Update'
     }
-    vmTemplate: ((!empty(vmTemplate)) ? json('null') : string(vmTemplate))
+    vmTemplate: ((!empty(vmTemplate)) ? null : string(vmTemplate))
   }
 }
 
@@ -168,28 +168,35 @@ resource hostPool_lock 'Microsoft.Authorization/locks@2016-09-01' = if (lock != 
   scope: hostPool
 }
 
-resource hostPool_diagnosticSettings 'Microsoft.Insights/diagnosticsettings@2017-05-01-preview' = if ((!empty(diagnosticStorageAccountId)) || (!empty(workspaceId)) || (!empty(eventHubAuthorizationRuleId)) || (!empty(eventHubName))) {
+resource hostPool_diagnosticSettings 'Microsoft.Insights/diagnosticsettings@2021-05-01-preview' = if ((!empty(diagnosticStorageAccountId)) || (!empty(workspaceId)) || (!empty(eventHubAuthorizationRuleId)) || (!empty(eventHubName))) {
   name: '${hostPool.name}-diagnosticsetting'
   properties: {
-    storageAccountId: (empty(diagnosticStorageAccountId) ? json('null') : diagnosticStorageAccountId)
-    workspaceId: (empty(workspaceId) ? json('null') : workspaceId)
-    eventHubAuthorizationRuleId: (empty(eventHubAuthorizationRuleId) ? json('null') : eventHubAuthorizationRuleId)
-    eventHubName: (empty(eventHubName) ? json('null') : eventHubName)
-    logs: ((empty(diagnosticStorageAccountId) && empty(workspaceId) && empty(eventHubAuthorizationRuleId) && empty(eventHubName)) ? json('null') : diagnosticsLogs)
+    storageAccountId: !empty(diagnosticStorageAccountId) ? diagnosticStorageAccountId : null
+    workspaceId: !empty(workspaceId) ? workspaceId : null
+    eventHubAuthorizationRuleId: !empty(eventHubAuthorizationRuleId) ? eventHubAuthorizationRuleId : null
+    eventHubName: !empty(eventHubName) ? eventHubName : null
+    logs: diagnosticsLogs
   }
   scope: hostPool
 }
 
 module hostPool_rbac '.bicep/nested_rbac.bicep' = [for (roleAssignment, index) in roleAssignments: {
-  name: '${uniqueString(deployment().name, location)}-Rbac-${index}'
+  name: '${uniqueString(deployment().name, location)}-HostPool-Rbac-${index}'
   params: {
-    roleAssignmentObj: roleAssignment
-    resourceName: hostPool.name
+    principalIds: roleAssignment.principalIds
+    roleDefinitionIdOrName: roleAssignment.roleDefinitionIdOrName
+    resourceId: hostPool.id
   }
 }]
 
+@description('The resource ID of the AVD host pool')
 output hostPoolResourceId string = hostPool.id
+
+@description('The resource group the AVD host pool was deployed into')
 output hostPoolResourceGroup string = resourceGroup().name
+
+@description('The name of the AVD host pool')
 output hostPoolName string = hostPool.name
+
+@description('The expiration time for the registration token')
 output tokenExpirationTime string = dateTimeAdd(baseTime, tokenValidityLength)
-output hostpoolToken string = '${hostPool.properties.registrationInfo.token}'

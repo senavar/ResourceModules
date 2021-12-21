@@ -63,18 +63,15 @@ param networkAcls object = {}
 @description('Optional. Virtual Network resource identifier, if networkAcls is passed, this value must be passed as well')
 param vNetId string = ''
 
-@description('Optional. The name of the Diagnostic setting.')
-param diagnosticSettingName string = 'service'
-
 @description('Optional. Specifies the number of days that logs will be kept for; a value of 0 will retain data indefinitely.')
 @minValue(0)
 @maxValue(365)
 param diagnosticLogsRetentionInDays int = 365
 
-@description('Optional. Resource identifier of the Diagnostic Storage Account.')
+@description('Optional. Resource ID of the diagnostic storage account.')
 param diagnosticStorageAccountId string = ''
 
-@description('Optional. Resource identifier of Log Analytics.')
+@description('Optional. Resource ID of log analytics.')
 param workspaceId string = ''
 
 @description('Optional. Resource ID of the event hub authorization rule for the Event Hubs namespace in which the event hub should be created or streamed to.')
@@ -100,7 +97,7 @@ param privateEndpoints array = []
 @description('Optional. Resource tags.')
 param tags object = {}
 
-@description('Optional. Customer Usage Attribution id (GUID). This GUID must be previously registered')
+@description('Optional. Customer Usage Attribution ID (GUID). This GUID must be previously registered')
 param cuaId string = ''
 
 @description('Generated. Do not provide a value! This date value is used to generate a SAS token to access the modules.')
@@ -149,11 +146,18 @@ var virtualNetworkRules = [for networkrule in ((contains(networkAcls, 'virtualNe
   id: '${vNetId}/subnets/${networkrule.subnet}'
 }]
 var networkAcls_var = {
-  bypass: (empty(networkAcls) ? json('null') : networkAcls.bypass)
-  defaultAction: (empty(networkAcls) ? json('null') : networkAcls.defaultAction)
-  virtualNetworkRules: (empty(networkAcls) ? json('null') : virtualNetworkRules)
-  ipRules: (empty(networkAcls) ? json('null') : ((length(networkAcls.ipRules) == 0) ? [] : networkAcls.ipRules))
+  bypass: (empty(networkAcls) ? null : networkAcls.bypass)
+  defaultAction: (empty(networkAcls) ? null : networkAcls.defaultAction)
+  virtualNetworkRules: (empty(networkAcls) ? null : virtualNetworkRules)
+  ipRules: (empty(networkAcls) ? null : ((length(networkAcls.ipRules) == 0) ? [] : networkAcls.ipRules))
 }
+
+var formattedAccessPolicies = [for accessPolicy in accessPolicies: {
+  applicationId: contains(accessPolicy, 'applicationId') ? accessPolicy.applicationId : ''
+  objectId: contains(accessPolicy, 'objectId') ? accessPolicy.objectId : ''
+  permissions: accessPolicy.permissions
+  tenantId: contains(accessPolicy, 'tenantId') ? accessPolicy.tenantId : tenant().tenantId
+}]
 
 module pid_cuaId '.bicep/nested_cuaId.bicep' = if (!empty(cuaId)) {
   name: 'pid-${cuaId}'
@@ -172,14 +176,14 @@ resource keyVault 'Microsoft.KeyVault/vaults@2019-09-01' = {
     softDeleteRetentionInDays: softDeleteRetentionInDays
     enableRbacAuthorization: enableRbacAuthorization
     createMode: createMode
-    enablePurgeProtection: ((!enablePurgeProtection) ? json('null') : enablePurgeProtection)
+    enablePurgeProtection: ((!enablePurgeProtection) ? null : enablePurgeProtection)
     tenantId: subscription().tenantId
-    accessPolicies: accessPolicies
+    accessPolicies: formattedAccessPolicies
     sku: {
       name: vaultSku
       family: 'A'
     }
-    networkAcls: (empty(networkAcls) ? json('null') : networkAcls_var)
+    networkAcls: (empty(networkAcls) ? null : networkAcls_var)
   }
 }
 
@@ -192,41 +196,47 @@ resource keyVault_lock 'Microsoft.Authorization/locks@2016-09-01' = if (lock != 
   scope: keyVault
 }
 
-resource keyVault_diagnosticSettings 'Microsoft.Insights/diagnosticsettings@2017-05-01-preview' = if ((!empty(diagnosticStorageAccountId)) || (!empty(workspaceId)) || (!empty(eventHubAuthorizationRuleId)) || (!empty(eventHubName))) {
-  name: '${name_var}-${diagnosticSettingName}'
+resource keyVault_diagnosticSettings 'Microsoft.Insights/diagnosticsettings@2021-05-01-preview' = if ((!empty(diagnosticStorageAccountId)) || (!empty(workspaceId)) || (!empty(eventHubAuthorizationRuleId)) || (!empty(eventHubName))) {
+  name: '${name_var}-diagnosticSettingName'
   properties: {
-    storageAccountId: (empty(diagnosticStorageAccountId) ? json('null') : diagnosticStorageAccountId)
-    workspaceId: (empty(workspaceId) ? json('null') : workspaceId)
-    eventHubAuthorizationRuleId: (empty(eventHubAuthorizationRuleId) ? json('null') : eventHubAuthorizationRuleId)
-    eventHubName: (empty(eventHubName) ? json('null') : eventHubName)
-    metrics: ((empty(diagnosticStorageAccountId) && empty(workspaceId) && empty(eventHubAuthorizationRuleId) && empty(eventHubName)) ? json('null') : diagnosticsMetrics)
-    logs: ((empty(diagnosticStorageAccountId) && empty(workspaceId) && empty(eventHubAuthorizationRuleId) && empty(eventHubName)) ? json('null') : diagnosticsLogs)
+    storageAccountId: !empty(diagnosticStorageAccountId) ? diagnosticStorageAccountId : null
+    workspaceId: !empty(workspaceId) ? workspaceId : null
+    eventHubAuthorizationRuleId: !empty(eventHubAuthorizationRuleId) ? eventHubAuthorizationRuleId : null
+    eventHubName: !empty(eventHubName) ? eventHubName : null
+    metrics: diagnosticsMetrics
+    logs: diagnosticsLogs
   }
   scope: keyVault
 }
 
+module keyVault_accessPolicies 'accessPolicies/deploy.bicep' = if (!empty(accessPolicies)) {
+  name: '${uniqueString(deployment().name, location)}-KeyVault-AccessPolicies'
+  params: {
+    keyVaultName: keyVault.name
+    accessPolicies: formattedAccessPolicies
+  }
+}
+
 module keyVault_secrets 'secrets/deploy.bicep' = [for (secret, index) in secrets: {
-  name: '${uniqueString(deployment().name, location)}-Secret-${index}'
+  name: '${uniqueString(deployment().name, location)}-KeyVault-Secret-${index}'
   params: {
     name: secret.name
     value: secret.value
-    vaultName: keyVault.name
+    keyVaultName: keyVault.name
     attributesEnabled: contains(secret, 'attributesEnabled') ? secret.attributesEnabled : true
     attributesExp: contains(secret, 'attributesExp') ? secret.attributesExp : -1
     attributesNbf: contains(secret, 'attributesNbf') ? secret.attributesNbf : -1
     contentType: contains(secret, 'contentType') ? secret.contentType : ''
     tags: contains(secret, 'tags') ? secret.tags : {}
+    roleAssignments: contains(secret, 'roleAssignments') ? secret.roleAssignments : []
   }
-  dependsOn: [
-    keyVault
-  ]
 }]
 
 module keyVault_keys 'keys/deploy.bicep' = [for (key, index) in keys: {
-  name: '${uniqueString(deployment().name, location)}-Key-${index}'
+  name: '${uniqueString(deployment().name, location)}-KeyVault-Key-${index}'
   params: {
     name: key.name
-    vaultName: keyVault.name
+    keyVaultName: keyVault.name
     attributesEnabled: contains(key, 'attributesEnabled') ? key.attributesEnabled : true
     attributesExp: contains(key, 'attributesExp') ? key.attributesExp : -1
     attributesNbf: contains(key, 'attributesNbf') ? key.attributesNbf : -1
@@ -235,14 +245,12 @@ module keyVault_keys 'keys/deploy.bicep' = [for (key, index) in keys: {
     keySize: contains(key, 'keySize') ? key.keySize : -1
     kty: contains(key, 'kty') ? key.kty : 'EC'
     tags: contains(key, 'tags') ? key.tags : {}
+    roleAssignments: contains(key, 'roleAssignments') ? key.roleAssignments : []
   }
-  dependsOn: [
-    keyVault
-  ]
 }]
 
 module keyVault_privateEndpoints '.bicep/nested_privateEndpoint.bicep' = [for (privateEndpoint, index) in privateEndpoints: {
-  name: '${uniqueString(deployment().name, location)}-PrivateEndpoint-${index}'
+  name: '${uniqueString(deployment().name, location)}-KeyVault-PrivateEndpoint-${index}'
   params: {
     privateEndpointResourceId: keyVault.id
     privateEndpointVnetLocation: (empty(privateEndpoints) ? 'dummy' : reference(split(privateEndpoint.subnetResourceId, '/subnets/')[0], '2020-06-01', 'Full').location)
@@ -252,21 +260,22 @@ module keyVault_privateEndpoints '.bicep/nested_privateEndpoint.bicep' = [for (p
 }]
 
 module keyVault_rbac '.bicep/nested_rbac.bicep' = [for (roleAssignment, index) in roleAssignments: {
-  name: '${deployment().name}-rbac-${index}'
+  name: '${uniqueString(deployment().name, location)}-KeyVault-Rbac-${index}'
   params: {
-    roleAssignmentObj: roleAssignment
-    resourceName: keyVault.name
+    principalIds: roleAssignment.principalIds
+    roleDefinitionIdOrName: roleAssignment.roleDefinitionIdOrName
+    resourceId: keyVault.id
   }
 }]
 
-@description('The Resource Id of the Key Vault.')
+@description('The resource ID of the key vault.')
 output keyVaultResourceId string = keyVault.id
 
-@description('The name of the Resource Group the Key Vault was created in.')
+@description('The name of the resource group the key vault was created in.')
 output keyVaultResourceGroup string = resourceGroup().name
 
-@description('The Name of the Key Vault.')
+@description('The name of the key vault.')
 output keyVaultName string = keyVault.name
 
-@description('The URL of the Key Vault.')
-output keyVaultUrl string = reference(keyVault.id, '2016-10-01').vaultUri
+@description('The URL of the key vault.')
+output keyVaultUrl string = keyVault.properties.vaultUri
