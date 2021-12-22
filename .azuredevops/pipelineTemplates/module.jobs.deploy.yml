@@ -60,7 +60,7 @@ parameters:
   resourceGroupName: '$(defaultResourceGroupName)'
   subscriptionId: '$(ARM_SUBSCRIPTION_ID)'
   managementGroupId: '$(ARM_MGMTGROUP_ID)'
-  parametersRepository: '$(Build.Repository.Name)'
+  parametersRepository: '$(parametersRepository)'
   modulesRepository: '$(modulesRepository)'
   # Azure PowerShell Version parameters
   azurePowerShellVersion: '$(azurePowerShellVersion)'

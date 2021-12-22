@@ -51,7 +51,7 @@ parameters:
   checkoutRepositories: ''
   # Logic-related parameters
   modulePath: '$(modulePath)'
-  parametersRepository: '$(Build.Repository.Name)'
+  parametersRepository: '$(parametersRepository)'
   location: '$(defaultLocation)'
   resourceGroupName: '$(defaultResourceGroupName)'
   subscriptionId: '$(ARM_SUBSCRIPTION_ID)'
